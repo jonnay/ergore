@@ -1,0 +1,329 @@
+#+title: Ergore - The IRC Emacs Igor
+#+PROPERTY: tangle yes
+#+PROPERTY: exports code 
+#+PROPERTY: file ergore.el 
+#+begin_src emacs-lisp :padline no
+  ;;; ergore.el --- Personal Bitlbee robot and helper
+  
+  ;; Copyright (C) 2012 Jonathan Arkell
+  
+  ;; Author: Jonathan Arkell <jonnay@jonnay.net>
+  ;; Created: 5 Oct 2012
+  ;; Keywords: erc bitlbee bot
+  ;; Version 0.1
+  
+  ;; This file is not part of GNU Emacs.
+  ;; Released under the GPL     
+  
+  ;;; Commentary: 
+  ;; Please see the org-file that this was generated from. 
+#+end_src
+
+* Mission
+
+  Provide a simple robot to be in intermediary between spell weaving (coding) and the outside world.
+
+* Changelog
+
+  - v0.1 :: First Version!
+
+* Caveats
+  
+  - This is super-beta software.  Right now it works great on my emacs, with only one IRC server, using bitlbee.
+
+* Interacting 
+
+  To interact with Ergore, you send the string "ERGORE! <cmd>", where <cmd> is the name of a defined command.
+
+#+begin_example
+ERGORE! fetch me a wrench!
+ERGORE! dig me a brain!
+ERGORE! sleep!
+#+end_example
+
+  These commands are for example only. 
+
+* Bot Name
+
+  Right now I am enforcing the name (and invocation) of the bot to be "ERGORE!"  Soon I will make her respond to any customizable name.
+#+begin_src emacs-lisp
+  (defconst ergore-invocation "ERGORE!")
+#+end_src
+
+* Bot Commands
+
+** ~ergore-commands~ 
+   
+   Commands are defined in a customizable variable that contains a list of commands to be executed. 
+  (defconst ergore-invocation "ERGORE!")
+  
+  (defcustom ergore-commands 
+    (append '((test . ergore-command-test)
+              (info . ergore-command-info)
+              (help . ergore-command-help)
+              (seen . ergore-command-seen)
+              (time . ergore-command-seen)
+              (why  . ergore-command-why)
+              (poke . ergore-command-force))
+  
+            (when (featurep 'sauron)
+              '((ping . ergore-command-ping)))
+  
+            (when (featurep 'mindwave-emacs)
+              '((brain . ergore-command-brain)))
+  
+            (when (featurep 'emagician-starter-kit)
+              '((chao . ergore-command-chao))))
+  
+    "An associative list of command names and functions to call in the format of:
+  ((command-name-symbol  . (lambda () ...))
+   (command-name-symbol2 . 'funname))"
+    :type '(alist :key-type symbol :value-type function))
+  
+#+end_src
+
+** Writing your own command 
+
+   Writing your own command is a fairly simple thing to do.  Each command function takes 1 or more arguments.  The first argument an erc-response data structure.  All other arguments are optional, and are essentially the commands passed to the bot by the irc user.  For sinace someone might issue:
+
+   #+begin_example
+   ERGORE! fetch me brains!
+   #+end_example
+
+   Assuming the "fetch" command was mapped to the function ~ergore-command-fetch~, that funciton would get the following arguments:
+   - erc-response
+   - "me"
+   - "brains!"
+
+   It is recoomended when you write your command function such that it does not require a particular set of arguments, that way if a user tries to send it too few, or too many arguments it can be handled gracefully.
+
+   You might do something similar to this:
+
+#+begin_src emacs-lisp
+  (defun ergore-command-test (data &rest args)
+    "Test command.  Outputs to the Emacs log.  NO one will see it."
+    (message "Data: %S Args: %S" data args))
+#+end_src
+
+*** Useful functions when writing your own commands
+   
+   I provide a few useful functions for working with commands.  In particular:
+   - ergore-get-nick :: retrieves the nickname from an erc-response data dstructure
+   - ergore-send :: sends text to a named nick int eh &bitlbee channel. the text sent could be a string or a list
+
+   Full documentation is in the embedded documentation for those commands.
+   ~C-h f <command-name>~ is your friend
+
+#+begin_src emacs-lisp  
+  (defun ergore-get-nick (data)
+    "Retrieve the nickname from an erc-response structure."
+    (car (erc-parse-user (erc-response.sender data))))
+  
+  (defun ergore-send (sendee lines)
+    "Send LINES to SENDEE.
+  SENDEE should be in the format of erc-response.sender 
+  LINES should be a string or a list of strings, which are the lines to send to the user."
+    (let ((nick (car (erc-parse-user sendee))))
+      (cond ((stringp lines)
+             (erc-message "PRIVMSG" (concat "&bitlbee " nick ": " lines) nil))
+            ((listp lines)
+             (mapc (lambda (line)
+                     (erc-message "PRIVMSG" (concat "&bitlbee " nick ": " line) nil))
+                   lines)))))
+#+end_src
+
+** Built-In Commands
+*** !ERGORE help
+	Displays help text to the user.  Horray for self documenting code!
+
+#+begin_src emacs-lisp  
+  (defun ergore-command-help (data &rest args)
+    "List all available commands."
+    (ergore-send (erc-response.sender data)
+                 (append '("here are the commands I accept:")
+                         (mapcar (lambda (command)
+                                   (format "ERGORE! %s - %s"
+                                           (car command)
+                                           (documentation (cdr command) t)))
+                                 ergore-commands))))
+#+end_src
+*** !ERGORE test 
+
+	This exists for my own testing purposes.  Writes a log message to the ~*Messages*~ buffer.
+	
+*** !ERGORE info 
+
+	Send basic information about ergore.  My MSN status in bitlbee is set to
+
+#+begin_example
+send me "ERGORE! info" to interact with my robot helper
+#+end_src
+
+	When then tells the user how to use "ERGORE! help" and "ERGORE! ping"
+
+#+begin_src emacs-lisp  
+  (defun ergore-command-info (data &rest args)
+    "Basic info about ERGORE."
+    (ergore-send (erc-response.sender data) 
+                 (list "Hello.  I am Ergore.  You can interact with me, and I can things for you--and especially--for my MASTER."
+                       "Say 'ERGORE! help' for a list of commands.  Say 'ERGORE! ping' to get Jonnays attention.")))
+#+end_src
+
+*** !ERGORE why
+
+	Sends the user the reason why I wrote this in the first place, and why she is named Ergore
+
+#+begin_src emacs-lisp  
+  (defun ergore-command-why (data &rest args)
+    "Learn why Jonnay made this and how"
+    (ergore-send (ergore-get-nick data)
+                 (list "Like Dr. Frankenstein, Jonnay made me in his Emacs laboratory one night.  He wasn't wearing his lab-coat at the time, but he sure wishes he was."
+                       "I was made because people sometimes need to contact Jonnay in the middle of a deep coding session.  Since Jonnay uses Emacs (his code editor) as his IM client, sometimes he misses messages because he is in the state of flow."
+                       "I am named Ergore for a few reasons.  First, it sounds like 'Igor'.  It has 'Er' in front because the client jonnay uses is called 'ERC'.  It also is reminiscent of 'ermahgerd' (http://knowyourmeme.com/memes/ermahgerd)"
+                       "Now you know.  ERMAHGERD ERTS ERGORE!")))
+#+end_src
+
+*** !ERGORE seen
+
+	Tells the user when you were last working with emacs.
+
+#+begin_src emacs-lisp  
+  (defun ergore-command-seen (data &rest args)
+    "Returns the last time that Emacs has seen jonnay."
+    (let ((idle (current-idle-time)))
+      (ergore-send (ergore-get-nick data)
+                   (format "Jonnay has been away from emacs %s%d.%2d seconds (can you imagine?)"
+                           (if (> (first idle) 0)
+                               (first idle)
+                             "")
+                           (second idle)
+                           (third idle)))))
+#+end_src
+
+*** !ERGORE ping
+
+	Uses sauron to send an alert to Ergors Master 
+
+#+begin_src emacs-lisp
+  (defun ergore-command-ping (data &rest args)
+    "Alerts me that you want my attention.  I may not answer right away.  Use poke in an emergency."
+    (message "%s %s" 
+             (car (erc-parse-user (erc-response.sender data))) 
+             (erc-parse-user (erc-response.sender data)))
+    (sauron-add-event 'ergore
+                      5
+                      (concat "MASTER! " (car (erc-parse-user (erc-response.sender data))) " Sent you a ping in ERC.")))
+#+end_src
+
+*** !ERGORE force
+
+	Pops the &bitlbee window up, and moves it to the bottom of the
+	buffer.  Used for when someone really wants your attention.  Note,
+	this is done in the most unobtrusive way I know, so that if you're
+	in the middle of hacking code, or avoiding being sniped by a grue,
+	it won't interupt your flow.
+
+#+begin_src emacs-lisp  
+  (defun ergore-command-force (data &rest args)
+    "FORCE the IM window to the front.  This is the equivalent of yelling at me."
+    (let ((cur-buffer (current-buffer)))
+      (set-window-point (display-buffer "&bitlbee" '(display-buffer-pop-up-window ((inhibit-same-window . nil))))
+                        (save-excursion 
+                          (set-buffer "&bitlbee") 
+                          (point-max)))))
+#+end_src
+*** !ERGORE brain
+
+	If you have mindwave-emacs (and a neurosky device) then it will send the attention and meditation levels that you have to the user.
+
+#+begin_src emacs-lisp  
+  (defun ergore-command-brain (data &rest args)
+    "Show Jonnays CURRENT NEUROLOGICAL EEG STATE. How cool is that?"
+    (let ((brain mindwave/current))
+      (cond ((or (null (cdr (assoc 'poorSignalLevel brain)))
+                 (= (cdr (assoc 'poorSignalLevel brain))
+                    200))
+             (ergore-send (ergore-get-nick data) 
+                          "Jonnay Doesn't have his mindwave on."))
+            ((> (cdr (assoc 'poorSignalLevel brain))
+                50)
+             (ergore-send (ergore-get-nick data) 
+                          "Jonnay's mindwave has a bad connection right now"))
+            (t 
+             (ergore-send (ergore-get-nick data) 
+                          (format "Attentive: %d%%  Relaxed: %d%%"
+                                  (mindwave/access-in 'eSense 'attention brain)
+                                  (mindwave/access-in 'eSense 'meditation brain)))))))
+  
+#+end_src
+*** !ERGORE chao
+
+	If you use the Emagician Starter Kit, then display a cookie of chaotic wisdom.
+
+#+begin_src emacs-lisp  
+  (defun ergore-command-chao (data &rest args)
+    "Make me read to you from a chaotic book of wisdom.  Could be long, could be short..."
+    (ergore-send (ergore-get-nick data)
+                 (split-string (emagician/cookie) "\n" t)))
+#+end_src
+
+* Interface to ERC
+** Code
+
+   This sets up an erc insert-pre-hook that intercepts the text, and if it is an ergore command, run the executor.
+
+   Note that this is very basic right now, and doesn't do a lot of error checking.  (It does do SOME though, I am not a complete madman.  Err... well.. maybe I am.  But It still does some error checking regardless.)
+
+#+begin_src emacs-lisp  
+  (defun ergore-erc-hook (string)
+    "Hooks into ERC and makes ergore go."
+    (let ((pos (string-match ergore-invocation string)))
+      (when pos (ergore-run-command (substring string (+ pos (length ergore-invocation))))))
+    string)
+  
+  (defun ergore-run-command (cmd-string)
+    "Main dispatch for running an ergore command."
+    (message "Ergore received command %s" cmd-string)
+    (let* ((cmd-parts (split-string (substring-no-properties cmd-string)))
+           (cmd (intern (substring-no-properties (car cmd-parts))))
+           (args (cdr cmd-parts))
+           (data (get-text-property 0 'erc-parsed cmd-string)))
+      (message "CMD: %S  ARGS: %S  DATA:%S" cmd args data)
+      (let ((cmd (cdr (assoc cmd ergore-commands))))    
+        (if cmd
+            (cond ((functionp cmd) 
+                   (apply cmd data args))
+                  ((and (symbolp cmd)
+                        (functionp cmd (symbol-value cmd)))
+                   (apply (symbol-value cmd) data args))
+                  (t 
+                   (message "Ergore: Someone tried to call %s with %s.  (%s)" cmd args data)))
+          (message "Ergore: Unknown command %s" cmd)))))
+
+  (add-hook 'erc-insert-pre-hook 'ergore-erc-hook)
+#+end_src
+
+** Tests.  Sorry, they suck for now.
+#+begin_src emacs-lisp  :export yes :tangle no
+  (ert-deftest test-egregore-run-command ()
+    (let* ((test-run nil)
+           (ergore-commands '((test . (lambda (arg) (setq test-run arg))))))
+      (ergore-run-command "test someargs")
+      (should (not (null test-run)))
+      (should (string= test-run "someargs"))))
+#+end_src
+
+* The End
+
+** Provide the package
+#+begin_src emacs-lisp
+(provide 'ergore)
+#+end_src 
+
+** And thank some dudes
+
+   Thanks to Perry, Demian, and Cory for helping to test it out.
+
+   Thanks to the erc folk for erc.
+
+   Thanks to my wife, cause she is awesome. 
