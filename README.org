@@ -2,7 +2,7 @@
 
 ** An Emacs IRC bot using ERC 
 
-Please check ergore.org for documenation. 
+rePlease check ergore.org for documenation. 
 
 And Code examples.
 

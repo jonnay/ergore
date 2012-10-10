@@ -15,6 +15,33 @@
 
 (defconst ergore-invocation "ERGORE!")
 
+(defconst ergore-invocation "ERGORE!")
+
+(defcustom ergore-commands 
+  (append '((test . ergore-command-test)
+            (info . ergore-command-info)
+            (help . ergore-command-help)
+            (seen . ergore-command-seen)
+            (time . ergore-command-seen)
+            (why  . ergore-command-why)
+            (poke . ergore-command-force))
+
+          (when (featurep 'sauron)
+            '((ping . ergore-command-ping)))
+
+          (when (featurep 'mindwave-emacs)
+            '((brain . ergore-command-brain)))
+
+          (when (featurep 'emagician-starter-kit)
+            '((chao . ergore-command-chao))))
+
+  "An associative list of command names and functions to call in the format of:
+((command-name-symbol  . (lambda () ...))
+ (command-name-symbol2 . 'funname))"
+  :type '(alist :key-type symbol :value-type function))
+
+(defvar ergore-debug t)
+
 (defun ergore-command-test (data &rest args)
   "Test command.  Outputs to the Emacs log.  NO one will see it."
   (message "Data: %S Args: %S" data args))
@@ -101,9 +128,18 @@ LINES should be a string or a list of strings, which are the lines to send to th
                         "Jonnay's mindwave has a bad connection right now"))
           (t 
            (ergore-send (ergore-get-nick data) 
-                        (format "Attentive: %d%%  Relaxed: %d%%"
-                                (mindwave/access-in 'eSense 'attention brain)
-                                (mindwave/access-in 'eSense 'meditation brain)))))))
+                        (list (format "Attentive: %d/100  Relaxed: %d/100"
+                                      (mindwave/access-in 'eSense 'attention brain)
+                                      (mindwave/access-in 'eSense 'meditation brain))
+                              (format "Relative EEG:  δ:%s  θ:%s  α:%s %s  β:%s %s  γ:%s %s "
+                                      (mindwave/access-in 'eegPower 'delta brain)                 
+                                      (mindwave/access-in 'eegPower 'theta brain)
+                                      (mindwave/access-in 'eegPower 'lowAlpha brain)
+                                      (mindwave/access-in 'eegPower 'highAlpha brain)
+                                      (mindwave/access-in 'eegPower 'lowBeta brain)
+                                      (mindwave/access-in 'eegPower 'highBeta brain)
+                                      (mindwave/access-in 'eegPower 'lowGamma brain)
+                                      (mindwave/access-in 'eegPower 'highGamma brain))))))))
 
 (defun ergore-command-chao (data &rest args)
   "Make me read to you from a chaotic book of wisdom.  Could be long, could be short..."
@@ -118,7 +154,8 @@ LINES should be a string or a list of strings, which are the lines to send to th
 
 (defun ergore-run-command (cmd-string)
   "Main dispatch for running an ergore command."
-  (message "Ergore received command %s" cmd-string)
+  (when ergore-debug
+    (message "Ergore received command %s" cmd-string))
   (let* ((cmd-parts (split-string (substring-no-properties cmd-string)))
          (cmd (intern (substring-no-properties (car cmd-parts))))
          (args (cdr cmd-parts))

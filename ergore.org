@@ -19,6 +19,8 @@
   ;; Please see the org-file that this was generated from. 
 #+end_src
 
+Note, if you are reading this on Github, it won't work untill they update their org-mode parser to respond properly to the ~#+begin_src~ blocks. 
+
 * Mission
 
   Provide a simple robot to be in intermediary between spell weaving (coding) and the outside world.
@@ -26,6 +28,10 @@
 * Changelog
 
   - v0.1 :: First Version!
+
+  - v0.2 :: 
+    - Added some debug code
+	- Ergore brain more descriptive
 
 * Caveats
   
@@ -55,6 +61,10 @@ ERGORE! sleep!
 ** ~ergore-commands~ 
    
    Commands are defined in a customizable variable that contains a list of commands to be executed. 
+
+*** TODO fix brain/ping/chao to work once loaded. 
+
+#+begin_src emacs-lisp
   (defconst ergore-invocation "ERGORE!")
   
   (defcustom ergore-commands 
@@ -80,6 +90,8 @@ ERGORE! sleep!
    (command-name-symbol2 . 'funname))"
     :type '(alist :key-type symbol :value-type function))
   
+  (defvar ergore-debug t)
+
 #+end_src
 
 ** Writing your own command 
@@ -251,9 +263,18 @@ send me "ERGORE! info" to interact with my robot helper
                           "Jonnay's mindwave has a bad connection right now"))
             (t 
              (ergore-send (ergore-get-nick data) 
-                          (format "Attentive: %d%%  Relaxed: %d%%"
-                                  (mindwave/access-in 'eSense 'attention brain)
-                                  (mindwave/access-in 'eSense 'meditation brain)))))))
+                          (list (format "Attentive: %d/100  Relaxed: %d/100"
+                                        (mindwave/access-in 'eSense 'attention brain)
+                                        (mindwave/access-in 'eSense 'meditation brain))
+                                (format "Relative EEG:  δ:%s  θ:%s  α:%s %s  β:%s %s  γ:%s %s "
+                                        (mindwave/access-in 'eegPower 'delta brain)                 
+                                        (mindwave/access-in 'eegPower 'theta brain)
+                                        (mindwave/access-in 'eegPower 'lowAlpha brain)
+                                        (mindwave/access-in 'eegPower 'highAlpha brain)
+                                        (mindwave/access-in 'eegPower 'lowBeta brain)
+                                        (mindwave/access-in 'eegPower 'highBeta brain)
+                                        (mindwave/access-in 'eegPower 'lowGamma brain)
+                                        (mindwave/access-in 'eegPower 'highGamma brain))))))))
   
 #+end_src
 *** !ERGORE chao
@@ -283,7 +304,8 @@ send me "ERGORE! info" to interact with my robot helper
   
   (defun ergore-run-command (cmd-string)
     "Main dispatch for running an ergore command."
-    (message "Ergore received command %s" cmd-string)
+    (when ergore-debug
+      (message "Ergore received command %s" cmd-string))
     (let* ((cmd-parts (split-string (substring-no-properties cmd-string)))
            (cmd (intern (substring-no-properties (car cmd-parts))))
            (args (cdr cmd-parts))
@@ -299,10 +321,11 @@ send me "ERGORE! info" to interact with my robot helper
                   (t 
                    (message "Ergore: Someone tried to call %s with %s.  (%s)" cmd args data)))
           (message "Ergore: Unknown command %s" cmd)))))
-
+  
   (add-hook 'erc-insert-pre-hook 'ergore-erc-hook)
 #+end_src
-
+*** TODO determine whether or not it makes sence to refactor it to be more functional 
+	- should a command return a list that is the string to send back?
 ** Tests.  Sorry, they suck for now.
 #+begin_src emacs-lisp  :export yes :tangle no
   (ert-deftest test-egregore-run-command ()
