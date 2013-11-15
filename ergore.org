@@ -169,7 +169,7 @@ ERGORE! sleep!
 
 #+begin_example
 send me "ERGORE! info" to interact with my robot helper
-#+end_src
+#+end_example
 
 	When then tells the user how to use "ERGORE! help" and "ERGORE! ping"
 
